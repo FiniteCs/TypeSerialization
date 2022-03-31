@@ -14,6 +14,12 @@ public sealed class AssemblerStream
         _buffer = Array.Empty<byte>();
     }
 
+    public void Dispose()
+    {
+        _buffer = null;
+        _position = 0;
+    }
+
     public static AssemblerStream operator +(AssemblerStream left, AssemblerStream right)
     {
         var leftBytes = left._buffer;

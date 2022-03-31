@@ -12,8 +12,11 @@ public static class Program
         var asm = tAsm.Assemble(type);
         File.WriteAllBytes("Test.dat", asm.Buffer);
         var disassembler = new TypeDisassembler(File.ReadAllBytes("Test.dat"));
-        var reference = disassembler.Disassemble();
-        PrintReference(reference);
+        var references = disassembler.Disassemble();
+        foreach (var reference in references)
+        {
+            PrintReference(reference);
+        }
         Console.WriteLine();
     }
 

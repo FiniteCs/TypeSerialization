@@ -1,25 +1,53 @@
 ﻿namespace TypeSerialization.Asm;
+
+using System;
 using System.Collections.Generic;
+using System.Linq;
 
 public sealed class TypeDisassembler
 {
+#pragma warning disable CA1822
     private readonly byte[] _input;
-    private static readonly byte[] REF_STACK_DECL = new byte[] { 230, 231, 232 };
-    private static readonly byte[] VALUE_STACK_DECL = new byte[] { 240, 241, 242 };
-    private static readonly byte[] NAME_STACK_DECL = new byte[] { 250, 251, 252 };
+    private static readonly byte[] REF_STREAM_DECL = new byte[] { 230, 231, 232 };
+    private static readonly byte[] END_REF_STREAM_DECL = new byte[] { 232, 231, 230 };
+    private static readonly byte[] VALUE_STREAM_DECL = new byte[] { 240, 241, 242 };
+    private static readonly byte[] NAME_STREAM_DECL = new byte[] { 250, 251, 252 };
 
     public TypeDisassembler(byte[] input)
     {
         _input = input;
     }
 
-    public ClassReference Disassemble()
+    public List<ClassReference> Disassemble()
     {
-        var referenceStream = ParseReferenceStream();
+        var referenceStack = ParseReferenceStack();
+        var classReferences = new List<ClassReference>();
         var valueStream = ParseValueStream();
         var nameStream = ParseNameStream();
-        var reference = ParseClassReference(referenceStream, valueStream, nameStream);
-        return reference.Reference;
+        valueStream.Position = 0;
+        nameStream.Position = 0;
+        var offset = 0;
+        do
+        {
+            var referenceStream = referenceStack.Pop();
+            referenceStream.Position = 0;
+            classReferences.Add(ParseClassReference(referenceStream, valueStream, nameStream, offset).Reference);
+            offset++;
+        }
+        while (referenceStack.Count > 0);
+        foreach (var reference in classReferences)
+        {
+            foreach (var field in reference.Fields)
+            {
+                if (field.Ptr.Value.Category == ValueCategory.ClassReference)
+                {
+                    var index = Convert.ToInt32(field.Ptr.Value.ValueObj);
+                    field.Ptr.Value.ValueObj = classReferences[index];
+                }
+            }
+        }
+
+        return classReferences;
     }
 
     public ClassPointer ParseClassReference(AssemblerStream referenceStream,
@@ -32,7 +60,6 @@ public sealed class TypeDisassembler
             return null;
         }
 
-        referenceStream.Position = offset;
         var namePtr = ParseNamePointer(referenceStream, nameStream);
         var fieldCount = referenceStream.Read<int>();
         var fields = new List<Field>();
@@ -136,10 +163,25 @@ public sealed class TypeDisassembler
         return value;
     }
 
-    public AssemblerStream ParseReferenceStream()
+    public Stack<AssemblerStream> ParseReferenceStack()
     {
-        var start = IndexOf(_input, REF_STACK_DECL) + 3;
-        var end = IndexOf(_input, VALUE_STACK_DECL);
+        var referenceStack = new Stack<AssemblerStream>();
+        AssemblerStream asm = _input;
+        asm.Position = 0;
+        var stackCount = asm.Read<int>();
+        asm.Dispose();
+        for (int i = 0; i < stackCount; i++)
+        {
+            referenceStack.Push(ParseReferenceStream(i));
+        }
+
+        return referenceStack;
+    }
+    
+    public AssemblerStream ParseReferenceStream(int index)
+    {
+        var start = PatternAt(_input, REF_STREAM_DECL).ToArray()[index] + 3;
+        var end = PatternAt(_input, END_REF_STREAM_DECL).ToArray()[index];
         var byteList = new List<byte>();
         for (var i = start; i < end; i++)
         {
@@ -151,8 +193,8 @@ public sealed class TypeDisassembler
 
     public AssemblerStream ParseValueStream()
     {
-        var start = IndexOf(_input, VALUE_STACK_DECL) + 3;
-        var end = IndexOf(_input, NAME_STACK_DECL);
+        var start = IndexOf(_input, VALUE_STREAM_DECL) + 3;
+        var end = IndexOf(_input, NAME_STREAM_DECL);
         var byteList = new List<byte>();
         for (var i = start; i < end; i++)
         {
@@ -164,7 +206,7 @@ public sealed class TypeDisassembler
 
     public AssemblerStream ParseNameStream()
     {
-        var start = IndexOf(_input, NAME_STACK_DECL) + 3;
+        var start = IndexOf(_input, NAME_STREAM_DECL) + 3;
         var end = _input.Length - 5;
         var byteList = new List<byte>();
         for (var i = start; i < end; i++)
@@ -201,4 +243,16 @@ public sealed class TypeDisassembler
 
         return -1;
     }
+
+    public static IEnumerable<int> PatternAt(byte[] source, byte[] pattern)
+    {
+        for (int i = 0; i < source.Length; i++)
+        {
+            if (source.Skip(i).Take(pattern.Length).SequenceEqual(pattern))
+            {
+                yield return i;
+            }
+        }
+    }
+#pragma warning restore CA1822
 }

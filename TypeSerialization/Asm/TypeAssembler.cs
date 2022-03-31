@@ -1,4 +1,5 @@
 ﻿namespace TypeSerialization.Asm;
+using System.Collections.Generic;
 using System.Text;
 
 /*
@@ -15,17 +16,18 @@ using System.Text;
  */
 public sealed class TypeAssembler
 {
-    private readonly AssemblerStream _referenceStream;
+    private readonly Stack<AssemblerStream> _referenceStack;
     private readonly AssemblerStream _nameStream;
     private readonly AssemblerStream _valueStream;
-    private static readonly byte[] REF_STACK_DECL = new byte[] { 230, 231, 232 };
-    private static readonly byte[] VALUE_STACK_DECL = new byte[] { 240, 241, 242 };
-    private static readonly byte[] NAME_STACK_DECL = new byte[] { 250, 251, 252 };
+    private static readonly byte[] REF_STREAM_DECL = new byte[] { 230, 231, 232 };
+    private static readonly byte[] END_REF_STREAM_DECL = new byte[] { 232, 231, 230 };
+    private static readonly byte[] VALUE_STREAM_DECL = new byte[] { 240, 241, 242 };
+    private static readonly byte[] NAME_STREAM_DECL = new byte[] { 250, 251, 252 };
     private static readonly byte[] EOF = new byte[] { 0, 255, 0, 255, 0 };
 
     public TypeAssembler()
     {
-        _referenceStream = new AssemblerStream();
+        _referenceStack = new Stack<AssemblerStream>();
         _nameStream = new AssemblerStream();
         _valueStream = new AssemblerStream();
     }
@@ -35,11 +37,17 @@ public sealed class TypeAssembler
         var asm = new AssemblerStream();
         var reference = Serializer.SerializeReference(obj);
         AssembleClassReference(reference);
-        asm += REF_STACK_DECL;
-        asm += _referenceStream;
-        asm += VALUE_STACK_DECL;
+        asm.Write(_referenceStack.Count);
+        do
+        {
+            asm += REF_STREAM_DECL;
+            asm += _referenceStack.Pop();
+            asm += END_REF_STREAM_DECL;
+        }
+        while (_referenceStack.Count > 0);
+        asm += VALUE_STREAM_DECL;
         asm += _valueStream;
-        asm += NAME_STACK_DECL;
+        asm += NAME_STREAM_DECL;
         asm += _nameStream;
         asm += EOF;
         return asm;
@@ -47,24 +55,26 @@ public sealed class TypeAssembler
 
     public ClassPointer AssembleClassReference(ClassReference reference)
     {
-        var offset = _referenceStream.Position;
+        var referenceStream = new AssemblerStream();
+        _referenceStack.Push(referenceStream);
+        var offset = _referenceStack.Count - 1;
         var namePtr = AssembleName(reference.Name);
-        _referenceStream.Write(namePtr.Offset);
-        _referenceStream.Write(reference.Fields.Count);
+        referenceStream.Write(namePtr.Offset);
+        referenceStream.Write(reference.Fields.Count);
         foreach (var field in reference.Fields)
         {
-            AssembleField(field);
+            AssembleField(field, referenceStream);
         }
 
         return new ClassPointer(offset, reference);
     }
 
-    public void AssembleField(Field field)
+    public void AssembleField(Field field, AssemblerStream referenceStream)
     {
         var namePtr = AssembleName(field.Name);
-        _referenceStream.Write(namePtr.Offset);
+        referenceStream.Write(namePtr.Offset);
         var valuePtr = AssembleValue(field.Ptr.Value);
-        _referenceStream.Write(valuePtr.Offset);
+        referenceStream.Write(valuePtr.Offset);
     }
 
     public NamePointer AssembleName(Name name)

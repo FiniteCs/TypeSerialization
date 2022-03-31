@@ -9,5 +9,5 @@ public class Value
     }
 
     public virtual ValueCategory Category { get; }
-    public virtual object ValueObj { get; }
+    public virtual object ValueObj { get; set; }
 }
