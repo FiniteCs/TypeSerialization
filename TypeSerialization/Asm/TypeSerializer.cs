@@ -3,7 +3,7 @@ using System;
 using System.Collections.Generic;
 using System.Reflection;
 
-public static class Serializer
+public static class TypeSerializer
 {
     /*
         Say we have a class that we want to serialize.
@@ -23,13 +23,19 @@ public static class Serializer
         var properties = type.GetProperties();
         foreach (var field in fields)
         {
-            var sField = SerializeField(field, value);
-            sFields.Add(sField);
+            if (Attribute.IsDefined(field, typeof(AsmSerializableAttribute)))
+            {
+                var sField = SerializeField(field, value);
+                sFields.Add(sField);
+            }
         }
         foreach (var p in properties)
         {
-            var sField = SerializeProperty(p, value);
-            sFields.Add(sField);
+            if (Attribute.IsDefined(p, typeof(AsmSerializableAttribute)))
+            {
+                var sField = SerializeProperty(p, value);
+                sFields.Add(sField);
+            }
         }
 
         return new ClassReference(name, sFields);

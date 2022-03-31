@@ -35,7 +35,7 @@ public sealed class TypeAssembler
     public AssemblerStream Assemble(object obj)
     {
         var asm = new AssemblerStream();
-        var reference = Serializer.SerializeReference(obj);
+        var reference = TypeSerializer.SerializeReference(obj);
         AssembleClassReference(reference);
         asm.Write(_referenceStack.Count);
         do
@@ -108,7 +108,7 @@ public sealed class TypeAssembler
 
     public void AssembleReferenceValue(object value)
     {
-        var reference = Serializer.SerializeReference(value);
+        var reference = TypeSerializer.SerializeReference(value);
         var referencePtr = AssembleClassReference(reference);
         _valueStream.Write(referencePtr.Offset);
     }

@@ -38,15 +38,27 @@ public static class Program
 
 public sealed class Test
 {
+    [AsmSerializable]
     public int A = 10;
+    
+    [AsmSerializable]
     public int B = 20;
+    
+    [AsmSerializable]
     public int C = 30;
+
+    [AsmSerializable]
     public Test2 Test2 = new();
 }
 
 public sealed class Test2
 {
+    [AsmSerializable]
     public int A = 40;
+
+    [AsmSerializable]
     public int B = 50;
+
+    [AsmSerializable]
     public int C = 60;
 }
